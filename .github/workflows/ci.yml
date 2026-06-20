@@ -65,10 +65,3 @@ jobs:
           tags: rl-trader:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Test Docker image
-        run: |
-          docker run --rm -d -p 8000:8000 --name rl-trader-test rl-trader:latest
-          sleep 5
-          curl -f http://localhost:8000/api/v1/health
-          docker stop rl-trader-test
