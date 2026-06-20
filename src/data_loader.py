@@ -1,6 +1,6 @@
 """
-Data loader — downloads historical price data from Yahoo Finance.
-Caches locally to avoid repeated API calls.
+Data loader — Improved with more technical indicators.
+Adds: ATR, Stochastic Oscillator, OBV, VWAP, Williams %R, lag features, price momentum.
 """
 import pandas as pd
 import numpy as np
@@ -15,17 +15,14 @@ def download_data(symbol=SYMBOL, start=START_DATE, end=END_DATE, save=True):
     print(f"Downloading {symbol} data ({start} to {end})...")
     df = yf.download(symbol, start=start, end=end, auto_adjust=True)
 
-    # Flatten multi-level columns from yfinance
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
-    # Ensure standard column names
     df = df.rename(columns={
         "Open": "open", "High": "high", "Low": "low",
         "Close": "close", "Volume": "volume",
     })
 
-    # Add technical indicators
     df = add_technical_indicators(df)
 
     if save:
@@ -38,46 +35,92 @@ def download_data(symbol=SYMBOL, start=START_DATE, end=END_DATE, save=True):
 
 
 def add_technical_indicators(df):
-    """Add commonly used technical indicators as features."""
+    """Add 25+ technical indicators."""
     df = df.copy()
+    df = df.ffill()
 
-    # Returns
+    # ─── Returns ─────────────────────────────────────────────────────────
     df["returns"] = df["close"].pct_change()
+    df["log_returns"] = np.log(df["close"] / df["close"].shift(1))
 
-    # Moving averages
-    df["sma_10"] = df["close"].rolling(10).mean()
-    df["sma_30"] = df["close"].rolling(30).mean()
-    df["sma_50"] = df["close"].rolling(50).mean()
+    # ─── Moving Averages ─────────────────────────────────────────────────
+    for period in [10, 20, 30, 50]:
+        df[f"sma_{period}"] = df["close"].rolling(period).mean()
 
-    # Exponential moving averages
     df["ema_12"] = df["close"].ewm(span=12, adjust=False).mean()
     df["ema_26"] = df["close"].ewm(span=26, adjust=False).mean()
 
-    # MACD
+    # ─── MACD ───────────────────────────────────────────────────────────
     df["macd"] = df["ema_12"] - df["ema_26"]
     df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
+    df["macd_hist"] = df["macd"] - df["macd_signal"]
 
-    # RSI (Relative Strength Index)
+    # ─── RSI ─────────────────────────────────────────────────────────────
     delta = df["close"].diff()
     gain = delta.where(delta > 0, 0).rolling(14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
     rs = gain / loss
     df["rsi"] = 100 - (100 / (1 + rs))
 
-    # Bollinger Bands
+    # ─── Bollinger Bands ─────────────────────────────────────────────────
     df["bb_middle"] = df["close"].rolling(20).mean()
     bb_std = df["close"].rolling(20).std()
     df["bb_upper"] = df["bb_middle"] + 2 * bb_std
     df["bb_lower"] = df["bb_middle"] - 2 * bb_std
+    df["bb_width"] = (df["bb_upper"] - df["bb_lower"]) / df["bb_middle"]
+    df["bb_position"] = (df["close"] - df["bb_lower"]) / (df["bb_upper"] - df["bb_lower"])
 
-    # Volatility
-    df["volatility"] = df["returns"].rolling(20).std()
+    # ─── ATR (Average True Range) ───────────────────────────────────────
+    tr1 = df["high"] - df["low"]
+    tr2 = (df["high"] - df["close"].shift(1)).abs()
+    tr3 = (df["low"] - df["close"].shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    df["atr"] = tr.rolling(14).mean()
+    df["atr_pct"] = df["atr"] / df["close"]
 
-    # Volume indicators
+    # ─── Stochastic Oscillator ──────────────────────────────────────────
+    low_14 = df["low"].rolling(14).min()
+    high_14 = df["high"].rolling(14).max()
+    df["stoch_k"] = 100 * (df["close"] - low_14) / (high_14 - low_14)
+    df["stoch_d"] = df["stoch_k"].rolling(3).mean()
+
+    # ─── Williams %R ─────────────────────────────────────────────────────
+    df["williams_r"] = -100 * (high_14 - df["close"]) / (high_14 - low_14)
+
+    # ─── OBV (On Balance Volume) ────────────────────────────────────────
+    obv = (np.sign(df["close"].diff()) * df["volume"]).fillna(0).cumsum()
+    df["obv"] = obv
+    df["obv_sma"] = obv.rolling(20).mean()
+    df["obv_ratio"] = obv / (df["obv_sma"] + 1)
+
+    # ─── VWAP (Volume Weighted Average Price) ───────────────────────────
+    df["vwap"] = (df["close"] * df["volume"]).rolling(20).sum() / df["volume"].rolling(20).sum()
+    df["vwap_dist"] = (df["close"] - df["vwap"]) / df["vwap"]
+
+    # ─── Volatility ──────────────────────────────────────────────────────
+    df["volatility_10"] = df["returns"].rolling(10).std()
+    df["volatility_20"] = df["returns"].rolling(20).std()
+    df["volatility_50"] = df["returns"].rolling(50).std()
+
+    # ─── Volume Indicators ───────────────────────────────────────────────
     df["volume_sma"] = df["volume"].rolling(20).mean()
-    df["volume_ratio"] = df["volume"] / df["volume_sma"]
+    df["volume_ratio"] = df["volume"] / (df["volume_sma"] + 1)
 
-    # Drop NaN rows
+    # ─── Momentum Indicators ─────────────────────────────────────────────
+    for period in [5, 10, 20]:
+        df[f"momentum_{period}"] = df["close"] / df["close"].shift(period) - 1
+
+    # ─── Lag Features (past returns) ─────────────────────────────────────
+    for lag in [1, 2, 3, 5]:
+        df[f"return_lag_{lag}"] = df["returns"].shift(lag)
+
+    # ─── Price Distance from Moving Averages ────────────────────────────
+    df["dist_sma_10"] = (df["close"] - df["sma_10"]) / df["sma_10"]
+    df["dist_sma_30"] = (df["close"] - df["sma_30"]) / df["sma_30"]
+    df["dist_sma_50"] = (df["close"] - df["sma_50"]) / df["sma_50"]
+
+    # Replace inf and drop NaN
+    df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna()
 
     return df
@@ -97,7 +140,7 @@ def load_data(filepath=None):
 
 def get_feature_columns(df):
     """Return the list of feature columns for the RL environment."""
-    exclude = ["open", "high", "low", "close", "volume", "adj close"]
+    exclude = {"open", "high", "low", "close", "volume", "adj close"}
     return [c for c in df.columns if c.lower() not in exclude]
 
 
@@ -114,8 +157,5 @@ def split_data(df, train_ratio=0.7):
 if __name__ == "__main__":
     df = download_data()
     print(f"\nShape: {df.shape}")
-    print(f"Columns: {list(df.columns)}")
-    print(f"\nFeature columns: {get_feature_columns(df)}")
-    train, test = split_data(df)
-    print(f"\nFirst 3 rows:")
-    print(df.head(3).to_string())
+    print(f"Columns ({len(df.columns)}): {list(df.columns)}")
+    print(f"\nFeature columns ({len(get_feature_columns(df))}): {get_feature_columns(df)}")

@@ -1,6 +1,7 @@
 """
-Streamlit Dashboard for RL Trading Bot.
-4-page interactive app: Overview, Backtest Results, Live Prediction, Market Analysis.
+Streamlit Dashboard for Improved RL Trading Bot.
+4 pages: Overview, Backtest, Live Prediction, Market Analysis.
+Now with: Sharpe ratio, drawdown, win rate, position heatmap.
 """
 import sys
 from pathlib import Path
@@ -15,47 +16,47 @@ import plotly.graph_objects as go
 import plotly.express as px
 import streamlit as st
 from stable_baselines3 import PPO
+import joblib
 
-from config import MODELS_DIR, INITIAL_BALANCE
-from data_loader import load_data, get_feature_columns, split_data, download_data
+from config import MODELS_DIR, INITIAL_BALANCE, ENSEMBLE_SEEDS
+from data_loader import load_data, get_feature_columns, split_data
 from trading_env import TradingEnv
-from agent import evaluate_agent
+from agent import evaluate_ensemble
 
 
-# ─── Page Config ─────────────────────────────────────────────────────────────
-st.set_page_config(page_title="RL Trading Bot", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="RL Trading Bot — Improved", page_icon="🤖", layout="wide")
 
 
-# ─── Cache data loading ─────────────────────────────────────────────────────
 @st.cache_data
 def get_data():
     return load_data()
 
 
 @st.cache_resource
-def get_model():
-    model_path = MODELS_DIR / "ppo_trading_agent"
-    if model_path.with_suffix(".zip").exists():
-        return PPO.load(model_path)
-    return None
+def get_ensemble():
+    models = []
+    for seed in ENSEMBLE_SEEDS:
+        path = MODELS_DIR / f"ppo_agent_seed_{seed}"
+        if path.with_suffix(".zip").exists():
+            models.append(PPO.load(path))
+    return models if models else None
 
 
 @st.cache_data
-def get_backtest_results():
+def get_backtest():
     results_path = MODELS_DIR / "backtest_results.csv"
-    if results_path.exists():
-        return pd.read_csv(results_path)
-    return None
+    summary_path = MODELS_DIR / "backtest_summary.joblib"
+    results = pd.read_csv(results_path) if results_path.exists() else None
+    summary = joblib.load(summary_path) if summary_path.exists() else None
+    return results, summary
 
 
 df = get_data()
-model = get_model()
-backtest = get_backtest_results()
+models = get_ensemble()
+backtest, summary = get_backtest()
 features = get_feature_columns(df)
 train_df, test_df = split_data(df)
 
-
-# ─── Sidebar ─────────────────────────────────────────────────────────────────
 st.sidebar.title("🤖 RL Trading Bot")
 st.sidebar.markdown("---")
 page = st.sidebar.radio("Navigate", [
@@ -66,169 +67,155 @@ page = st.sidebar.radio("Navigate", [
 ])
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Symbol:** AAPL (Apple)")
-st.sidebar.markdown("**Model:** PPO (Stable-Baselines3)")
+st.sidebar.markdown("**Model:** PPO Ensemble (3 seeds)")
+st.sidebar.markdown(f"**Features:** {len(features)} indicators")
+st.sidebar.markdown(f"**Action:** Continuous (0-100%)")
 st.sidebar.markdown(f"**Data:** {len(df):,} days")
-st.sidebar.markdown(f"**Initial Capital:** ${INITIAL_BALANCE:,}")
 
 
-# ─── Overview ────────────────────────────────────────────────────────────────
 if page == "📊 Overview":
     st.title("📊 RL Trading Bot — Overview")
-    st.markdown("Reinforcement Learning agent that learns to trade stocks using PPO.")
+    st.markdown("Improved RL trading agent with **continuous action space**, **risk-adjusted reward**, and **3-agent ensemble**.")
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Symbol", "AAPL")
     col2.metric("Data Points", f"{len(df):,}")
     col3.metric("Features", len(features))
-    col4.metric("Initial Capital", f"${INITIAL_BALANCE:,}")
+    col4.metric("Agents", f"{len(models) if models else 0} (ensemble)")
 
-    if model is not None:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Model Status", "✅ Trained")
-        with col2:
-            st.metric("Algorithm", "PPO")
-    else:
-        st.warning("Model not yet trained. Run `python src/agent.py` to train.")
+    if summary:
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Agent Return", f"{summary['total_return']:.2%}")
+        col2.metric("Sharpe Ratio", f"{summary['sharpe_ratio']:.2f}")
+        col3.metric("Max Drawdown", f"{summary['max_drawdown']:.2%}")
+        col4.metric("Win Rate", f"{summary['win_rate']:.1%}")
 
     st.markdown("---")
     st.subheader("Price History")
     fig = go.Figure(data=[go.Candlestick(
-        x=df.index,
-        open=df["open"], high=df["high"],
-        low=df["low"], close=df["close"],
-        name="AAPL"
+        x=df.index, open=df["open"], high=df["high"],
+        low=df["low"], close=df["close"], name="AAPL"
     )])
     fig.update_layout(height=500, xaxis_rangeslider_visible=False)
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
-    st.subheader("Training vs Test Split")
+    st.subheader("Train/Test Split")
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=train_df.index, y=train_df["close"], name="Train", line=dict(color="blue")))
     fig.add_trace(go.Scatter(x=test_df.index, y=test_df["close"], name="Test", line=dict(color="orange")))
-    fig.update_layout(height=350, title="AAPL Close Price — Train/Test Split")
+    fig.update_layout(height=350)
     st.plotly_chart(fig, use_container_width=True)
 
+    st.markdown("---")
+    st.subheader("Improvements Over v1")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**v1 (Original)**")
+        st.markdown("- 15 features\n- Discrete actions (BUY/HOLD/SELL)\n- Simple P/L reward\n- Single agent\n- Return: +36.19%")
+    with col2:
+        st.markdown("**v2 (Improved)**")
+        st.markdown(f"- 42 features\n- Continuous actions (0-100%)\n- Risk-adjusted reward (Sharpe + DD penalty)\n- 3-agent ensemble (seeds: {ENSEMBLE_SEEDS})\n- Return: {summary['total_return']:.2%}" if summary else "- 42 features\n- Continuous actions\n- Risk-adjusted reward\n- 3-agent ensemble")
 
-# ─── Backtest Results ────────────────────────────────────────────────────────
+
 elif page == "📈 Backtest Results":
     st.title("📈 Backtest Results")
 
-    if backtest is not None:
+    if backtest is not None and summary is not None:
         st.subheader("Performance Summary")
 
-        final_nw = backtest["net_worth"].iloc[-1]
-        total_return = (final_nw - INITIAL_BALANCE) / INITIAL_BALANCE
-        n_trades = int(backtest["action"].ne(backtest["action"].shift()).sum())
-
-        # Buy & hold
-        first_price = float(test_df.iloc[10]["close"])
-        last_price = float(test_df.iloc[-1]["close"])
-        bh_return = (last_price - first_price) / first_price
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Final Portfolio", f"${summary['final_net_worth']:,.2f}")
+        col2.metric("Agent Return", f"{summary['total_return']:.2%}")
+        col3.metric("Buy & Hold", f"{summary['bh_return']:.2%}")
+        col4.metric("Outperformed?", "✅ Yes" if summary["outperformed"] else "❌ No")
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Final Portfolio", f"${final_nw:,.2f}")
-        col2.metric("Agent Return", f"{total_return:.2%}")
-        col3.metric("Buy & Hold Return", f"{bh_return:.2%}")
-        delta_color = "inverse" if total_return > bh_return else "normal"
-        col4.metric("Agent vs B&H", f"{total_return - bh_return:+.2%}")
+        col1.metric("Sharpe Ratio", f"{summary['sharpe_ratio']:.2f}")
+        col2.metric("Max Drawdown", f"{summary['max_drawdown']:.2%}")
+        col3.metric("Win Rate", f"{summary['win_rate']:.1%}")
+        col4.metric("Profit Factor", f"{summary['profit_factor']:.2f}")
 
         st.markdown("---")
         st.subheader("Portfolio Value Over Time")
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=backtest.index, y=backtest["net_worth"],
-                                 name="Agent Portfolio", line=dict(color="blue", width=2)))
+        fig.add_trace(go.Scatter(y=backtest["net_worth"], name="Agent Portfolio", line=dict(color="blue", width=2)))
 
-        # Buy & hold benchmark
         bh_values = [INITIAL_BALANCE]
         for i in range(1, len(backtest)):
-            daily_return = (backtest["price"].iloc[i] - backtest["price"].iloc[i-1]) / backtest["price"].iloc[i-1]
-            bh_values.append(bh_values[-1] * (1 + daily_return))
-        fig.add_trace(go.Scatter(x=backtest.index, y=bh_values,
-                                 name="Buy & Hold", line=dict(color="gray", dash="dash")))
-        fig.update_layout(height=500, title="Agent vs Buy & Hold",
-                          xaxis_title="Step", yaxis_title="Portfolio Value ($)")
+            dr = (backtest["price"].iloc[i] - backtest["price"].iloc[i-1]) / backtest["price"].iloc[i-1]
+            bh_values.append(bh_values[-1] * (1 + dr))
+        fig.add_trace(go.Scatter(y=bh_values, name="Buy & Hold", line=dict(color="gray", dash="dash")))
+        fig.update_layout(height=500, xaxis_title="Step", yaxis_title="Portfolio Value ($)")
         st.plotly_chart(fig, use_container_width=True)
 
         st.markdown("---")
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("Trading Actions")
-            action_counts = backtest["action"].value_counts().rename({0: "SELL", 1: "HOLD", 2: "BUY"})
-            fig = px.bar(x=action_counts.index, y=action_counts.values,
-                         color=action_counts.index,
-                         color_discrete_map={"BUY": "#2ecc71", "HOLD": "#f39c12", "SELL": "#e74c3c"},
-                         labels={"x": "Action", "y": "Count"})
-            fig.update_layout(showlegend=False, height=350)
+            st.subheader("Position Over Time")
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(y=backtest["position_frac"] * 100, name="Position %", fill="tozeroy", line=dict(color="green")))
+            fig.update_layout(height=350, yaxis_title="% Invested")
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
-            st.subheader("Price & Actions")
+            st.subheader("Drawdown Over Time")
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=backtest.index, y=backtest["price"],
-                                     name="Price", line=dict(color="black", width=1)))
-            buys = backtest[backtest["action"] == 2]
-            sells = backtest[backtest["action"] == 0]
-            fig.add_trace(go.Scatter(x=buys.index, y=buys["price"], mode="markers",
-                                    marker=dict(color="green", size=6, symbol="triangle-up"),
-                                    name="BUY"))
-            fig.add_trace(go.Scatter(x=sells.index, y=sells["price"], mode="markers",
-                                    marker=dict(color="red", size=6, symbol="triangle-down"),
-                                    name="SELL"))
-            fig.update_layout(height=350)
+            fig.add_trace(go.Scatter(y=backtest["drawdown"] * 100, name="Drawdown %", fill="tozeroy", line=dict(color="red")))
+            fig.add_hline(y=0, line_color="black")
+            fig.update_layout(height=350, yaxis_title="Drawdown %")
             st.plotly_chart(fig, use_container_width=True)
 
+        st.markdown("---")
+        st.subheader("Price & Position Actions")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(y=backtest["price"], name="Price", line=dict(color="black", width=1)))
+        colors = backtest["action"].apply(lambda x: "green" if x > 0.1 else ("red" if x < -0.1 else "gray"))
+        fig.add_trace(go.Scatter(y=backtest["price"], mode="markers",
+                                 marker=dict(color=colors, size=3),
+                                 name="Actions"))
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
+
     else:
-        st.warning("No backtest results found. Run `python src/agent.py` to train and evaluate.")
+        st.warning("No backtest results. Run `python src/agent.py` first.")
 
 
-# ─── Live Prediction ─────────────────────────────────────────────────────────
 elif page == "🔮 Live Prediction":
     st.title("🔮 Live Prediction")
-    st.markdown("Run the trained agent on the test data and see its decisions in real-time.")
 
-    if model is not None:
-        if st.button("🚀 Run Agent on Test Data", type="primary"):
-            with st.spinner("Running agent..."):
-                results_df, summary = evaluate_agent(model, test_df, features)
+    if models is not None:
+        if st.button("🚀 Run Ensemble on Test Data", type="primary"):
+            with st.spinner("Running 3-agent ensemble..."):
+                results_df, eval_summary = evaluate_ensemble(models, test_df, features)
 
                 st.markdown("---")
-                st.subheader("Results")
-
                 col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Final Portfolio", f"${summary['final_net_worth']:,.2f}")
-                col2.metric("Agent Return", f"{summary['total_return']:.2%}")
-                col3.metric("Buy & Hold", f"{summary['bh_return']:.2%}")
-                col4.metric("Outperformed?", "✅ Yes" if summary["outperformed"] else "❌ No")
+                col1.metric("Final Portfolio", f"${eval_summary['final_net_worth']:,.2f}")
+                col2.metric("Return", f"{eval_summary['total_return']:.2%}")
+                col3.metric("Sharpe", f"{eval_summary['sharpe_ratio']:.2f}")
+                col4.metric("Max DD", f"{eval_summary['max_drawdown']:.2%}")
 
                 st.markdown("---")
                 st.subheader("Portfolio vs Buy & Hold")
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(y=results_df["net_worth"],
-                                         name="Agent", line=dict(color="blue", width=2)))
-
-                bh_values = [INITIAL_BALANCE]
+                fig.add_trace(go.Scatter(y=results_df["net_worth"], name="Agent", line=dict(color="blue", width=2)))
+                bh = [INITIAL_BALANCE]
                 for i in range(1, len(results_df)):
                     dr = (results_df["price"].iloc[i] - results_df["price"].iloc[i-1]) / results_df["price"].iloc[i-1]
-                    bh_values.append(bh_values[-1] * (1 + dr))
-                fig.add_trace(go.Scatter(y=bh_values,
-                                         name="Buy & Hold", line=dict(color="gray", dash="dash")))
-                fig.update_layout(height=500, xaxis_title="Step", yaxis_title="Value ($)")
+                    bh.append(bh[-1] * (1 + dr))
+                fig.add_trace(go.Scatter(y=bh, name="Buy & Hold", line=dict(color="gray", dash="dash")))
+                fig.update_layout(height=500)
                 st.plotly_chart(fig, use_container_width=True)
 
-                st.markdown("---")
-                st.subheader("Action Distribution")
-                st.dataframe(results_df[["step", "price", "net_worth", "action"]].head(50),
+                st.dataframe(results_df[["step", "price", "net_worth", "position_frac", "action"]].head(50),
                              use_container_width=True)
     else:
-        st.warning("Model not trained. Run `python src/agent.py` first.")
+        st.warning("Models not trained. Run `python src/agent.py` first.")
 
 
-# ─── Market Analysis ────────────────────────────────────────────────────────
 elif page == "💹 Market Analysis":
     st.title("💹 Market Analysis")
-    st.markdown("Explore the market data and technical indicators used by the agent.")
 
     indicator = st.selectbox("Select indicator", features + ["close", "volume"])
 
@@ -236,16 +223,14 @@ elif page == "💹 Market Analysis":
     with col1:
         st.subheader(f"{indicator} over time")
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df.index, y=df[indicator], name=indicator,
-                                 line=dict(color="blue", width=1)))
+        fig.add_trace(go.Scatter(x=df.index, y=df[indicator], name=indicator, line=dict(color="blue", width=1)))
         fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        st.subheader("RSI (Relative Strength Index)")
+        st.subheader("RSI")
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df.index, y=df["rsi"], name="RSI",
-                                 line=dict(color="purple", width=1)))
+        fig.add_trace(go.Scatter(x=df.index, y=df["rsi"], name="RSI", line=dict(color="purple")))
         fig.add_hline(y=70, line_dash="dash", line_color="red", annotation_text="Overbought")
         fig.add_hline(y=30, line_dash="dash", line_color="green", annotation_text="Oversold")
         fig.update_layout(height=400)
@@ -253,7 +238,7 @@ elif page == "💹 Market Analysis":
 
     st.markdown("---")
     st.subheader("Feature Correlation")
-    corr_cols = ["close", "returns", "rsi", "macd", "sma_10", "sma_30", "volatility", "volume_ratio"]
+    corr_cols = ["close", "returns", "rsi", "macd", "stoch_k", "atr_pct", "bb_position", "volume_ratio", "momentum_10"]
     available = [c for c in corr_cols if c in df.columns]
     if len(available) > 1:
         corr = df[available].corr()
@@ -263,5 +248,5 @@ elif page == "💹 Market Analysis":
 
     st.markdown("---")
     st.subheader("Data Sample")
-    st.dataframe(df[["close", "returns", "rsi", "macd", "sma_10", "sma_30"]].tail(20),
-                 use_container_width=True)
+    display_cols = [c for c in ["close", "returns", "rsi", "macd", "stoch_k", "atr_pct", "bb_position", "momentum_10"] if c in df.columns]
+    st.dataframe(df[display_cols].tail(20), use_container_width=True)
