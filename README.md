@@ -1,116 +1,144 @@
-# 🤖 RL Trading Bot
+# RL Trader — Enterprise Reinforcement Learning Trading Bot
 
-A Reinforcement Learning trading bot that learns to trade stocks using PPO (Proximal Policy Optimization). The agent observes market data and technical indicators, then decides to **BUY**, **HOLD**, or **SELL** to maximize portfolio returns.
+A production-grade RL trading system with PPO ensemble, 42 technical indicators, REST API, Docker deployment, and CI/CD.
 
-## 📊 Project Overview
-
-| Component | Details |
-|-----------|---------|
-| Algorithm | PPO (Proximal Policy Optimization) |
-| Library | Stable-Baselines3 |
-| Environment | Custom OpenAI Gymnasium |
-| Data | Yahoo Finance API (AAPL, 2015-2024) |
-| Data Points | 2,466 trading days |
-| Features | 15 technical indicators |
-| Action Space | 3 (Sell, Hold, Buy) |
-| Observation | 10-day window × 15 features + position info |
-| Initial Capital | $10,000 |
-
-## 🧠 How It Works
+## 🏗️ Architecture
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│ Market Data  │────▶│   RL Agent   │────▶│   Action    │
-│ (15 features)│     │   (PPO)      │     │ Buy/Hold/   │
-│ (10-day win) │     │              │     │ Sell        │
-└─────────────┘     └──────────────┘     └──────┬──────┘
-                                                 │
-                    ┌──────────────┐              │
-                    │   Reward     │◀─────────────┘
-                    │ (P/L change) │
-                    └──────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        RL TRADER v2.0                            │
+│                                                                  │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────────┐ │
+│  │  Config   │   │   Data   │   │  Models  │   │     API      │ │
+│  │ (YAML +   │   │ (42 ind. │   │ (PPO +   │   │ (FastAPI     │ │
+│  │  env vars)│   │  multi-  │   │ ensemble)│   │  REST +      │ │
+│  │           │   │  asset)  │   │          │   │  OpenAPI)    │ │
+│  └─────┬─────┘   └────┬─────┘   └────┬─────┘   └──────┬───────┘ │
+│        │               │              │                │         │
+│        └───────────────┴──────────────┴────────────────┘         │
+│                          │                                       │
+│                   ┌────────────┐    ┌──────────┐                 │
+│                   │  CLI Tool   │    │ Streamlit│                 │
+│                   │ (rltrader)  │    │ Dashboard│                 │
+│                   └────────────┘    └──────────┘                 │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │              Infrastructure                               │   │
+│  │  Docker + CI/CD (GitHub Actions) + Tests (pytest)         │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-1. **Observation**: Agent sees 10 days of normalized market features + current position
-2. **Action**: Agent chooses BUY (invest all), HOLD (do nothing), or SELL (liquidate)
-3. **Reward**: Change in portfolio net worth (profit/loss), minus trading fees
-4. **Training**: PPO learns optimal policy over 200K timesteps
+## 📦 Installation
+
+### From Source (Development)
+```bash
+git clone https://github.com/Yaser-Shawdfi/rl-trading-bot.git
+cd rl-trading-bot
+pip install -e ".[dev]"
+```
+
+### With Docker (Production)
+```bash
+docker-compose up
+# API at http://localhost:8000
+# UI at http://localhost:8501
+```
+
+## 🚀 Usage
+
+### CLI Commands
+```bash
+# Train the agent ensemble
+rltrader train --symbol AAPL --timesteps 200000
+
+# Run backtest
+rltrader backtest --symbol AAPL
+
+# Get prediction for day 100
+rltrader predict --symbol AAPL --day 100
+
+# Start REST API
+rltrader api --host 0.0.0.0 --port 8000
+
+# Start Streamlit dashboard
+rltrader ui --port 8501
+```
+
+### REST API
+```bash
+# Health check
+curl http://localhost:8000/api/v1/health
+
+# Get market data
+curl http://localhost:8000/api/v1/market/AAPL?limit=10
+
+# Get prediction
+curl -X POST http://localhost:8000/api/v1/predict \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "AAPL", "day_index": 100}'
+
+# Run backtest
+curl http://localhost:8000/api/v1/backtest?symbol=AAPL
+
+# Trigger training (async)
+curl -X POST http://localhost:8000/api/v1/train \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "AAPL", "timesteps": 200000}'
+```
+
+API docs available at: `http://localhost:8000/docs`
+
+## 🧪 Testing
+```bash
+# Run all tests
+pytest rl_trader/tests/ -v
+
+# With coverage
+pytest rl_trader/tests/ --cov=rl_trader --cov-report=term
+```
 
 ## 📁 Project Structure
-
 ```
 rl-trading-bot/
-├── config.py                # Configuration (hyperparameters, trading params)
-├── requirements.txt         # Python dependencies
-├── src/
-│   ├── data_loader.py       # Yahoo Finance data + 15 technical indicators
-│   ├── trading_env.py       # Custom Gymnasium trading environment
-│   └── agent.py             # PPO training + evaluation
-├── app/
-│   └── app.py               # 4-page Streamlit dashboard
-├── data/                    # Cached market data
-├── models/                  # Saved model + backtest results
-└── reports/                 # Generated charts
+├── rl_trader/                    # Python package
+│   ├── __init__.py
+│   ├── cli.py                    # CLI entry point (rltrader command)
+│   ├── config/
+│   │   ├── __init__.py           # Config dataclasses + loader
+│   │   └── settings.yaml         # YAML configuration
+│   ├── data/
+│   │   ├── __init__.py
+│   │   └── data_loader.py        # Multi-asset data + 42 indicators
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── trading_env.py        # Gymnasium environment
+│   │   └── agent.py              # PPO + Ensemble + BacktestEngine
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── main.py               # FastAPI REST API
+│   └── tests/
+│       ├── test_data.py          # Data loader tests
+│       ├── test_env.py           # Environment tests
+│       └── test_api.py           # API endpoint tests
+├── app/app.py                    # Streamlit dashboard
+├── data/                         # Cached market data
+├── models/                       # Saved model artifacts
+├── Dockerfile                    # Multi-stage Docker build
+├── docker-compose.yml            # API + UI + test services
+├── pyproject.toml                # Package config + dependencies
+├── .github/workflows/ci.yml     # GitHub Actions CI/CD
+└── README.md
 ```
 
-## 🚀 Quick Start
+## 🔧 Configuration
 
-### 1. Install Dependencies
+All config in `rl_trader/config/settings.yaml`. Override with env vars:
 ```bash
-pip install -r requirements.txt
+export RLTRADER__TRADING__SYMBOL=MSFT
+export RLTRADER__AGENT__TOTAL_TIMESTEPS=500000
+export RLTRADER__LOGGING__LEVEL=DEBUG
 ```
-
-### 2. Download Market Data
-```bash
-python src/data_loader.py
-```
-
-### 3. Train the RL Agent
-```bash
-PYTHONPATH=. python src/agent.py
-```
-
-### 4. Launch the Dashboard
-```bash
-streamlit run app/app.py --server.port 8501
-```
-
-## 📈 Technical Indicators Used
-
-| Indicator | Description |
-|-----------|-------------|
-| Returns | Daily percentage change |
-| SMA 10/30/50 | Simple Moving Averages |
-| EMA 12/26 | Exponential Moving Averages |
-| MACD | Moving Average Convergence Divergence |
-| RSI | Relative Strength Index (14-day) |
-| Bollinger Bands | 20-day ± 2σ |
-| Volatility | 20-day rolling std of returns |
-| Volume Ratio | Volume / 20-day average volume |
-
-## 🎯 Action Space
-
-| Action | Code | Behavior |
-|--------|------|----------|
-| SELL | 0 | Liquidate all shares → cash |
-| HOLD | 1 | Do nothing |
-| BUY | 2 | Invest all cash → shares |
-
-## 📊 Dashboard Pages
-
-1. **📊 Overview** — Price history, train/test split, model status
-2. **📈 Backtest Results** — Portfolio value vs buy & hold, trading actions
-3. **🔮 Live Prediction** — Run agent on test data in real-time
-4. **💹 Market Analysis** — Technical indicators, correlations, RSI
-
-## 📝 Academic Context
-
-This project demonstrates:
-- Reinforcement Learning (PPO) applied to finance
-- Custom OpenAI Gymnasium environment design
-- Technical analysis & feature engineering
-- Backtesting against buy-and-hold benchmark
-- Interactive web deployment
 
 ## 📄 License
 
