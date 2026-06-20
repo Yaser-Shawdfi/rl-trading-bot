@@ -35,6 +35,10 @@ jobs:
           ruff check rl_trader/
           ruff format --check rl_trader/
 
+      - name: Download test data
+        run: |
+          python -c "from rl_trader.data import load_data; load_data()"
+
       - name: Run tests
         run: |
           pytest rl_trader/tests/ -v --cov=rl_trader --cov-report=xml --cov-report=term
