@@ -1,12 +1,13 @@
 """
 Enterprise data loader — multi-asset support, caching, 42+ indicators.
 """
-import pandas as pd
-import numpy as np
-import yfinance as yf
+
 import logging
 from pathlib import Path
-from typing import Optional, List, Tuple
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
 
 logger = logging.getLogger("rl_trader.data")
 
@@ -14,8 +15,13 @@ logger = logging.getLogger("rl_trader.data")
 class DataLoader:
     """Multi-asset data loader with caching and technical indicators."""
 
-    def __init__(self, cache_dir: str = "data", symbol: str = "AAPL",
-                 start: str = "2015-01-01", end: str = "2024-12-31"):
+    def __init__(
+        self,
+        cache_dir: str = "data",
+        symbol: str = "AAPL",
+        start: str = "2015-01-01",
+        end: str = "2024-12-31",
+    ):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.symbol = symbol
@@ -45,10 +51,15 @@ class DataLoader:
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-        df = df.rename(columns={
-            "Open": "open", "High": "high", "Low": "low",
-            "Close": "close", "Volume": "volume",
-        })
+        df = df.rename(
+            columns={
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+                "Volume": "volume",
+            }
+        )
         df = df.ffill()
         return df
 
@@ -87,11 +98,14 @@ class DataLoader:
         df["bb_position"] = (df["close"] - df["bb_lower"]) / (df["bb_upper"] - df["bb_lower"])
 
         # ATR
-        tr = pd.concat([
-            df["high"] - df["low"],
-            (df["high"] - df["close"].shift(1)).abs(),
-            (df["low"] - df["close"].shift(1)).abs()
-        ], axis=1).max(axis=1)
+        tr = pd.concat(
+            [
+                df["high"] - df["low"],
+                (df["high"] - df["close"].shift(1)).abs(),
+                (df["low"] - df["close"].shift(1)).abs(),
+            ],
+            axis=1,
+        ).max(axis=1)
         df["atr"] = tr.rolling(14).mean()
         df["atr_pct"] = df["atr"] / df["close"]
 
@@ -141,13 +155,13 @@ class DataLoader:
         logger.info(f"Added {len(df.columns)} columns ({len(get_feature_columns(df))} features)")
 
 
-def get_feature_columns(df: pd.DataFrame) -> List[str]:
+def get_feature_columns(df: pd.DataFrame) -> list[str]:
     """Return feature column names (excludes OHLCV)."""
     exclude = {"open", "high", "low", "close", "volume", "adj close"}
     return [c for c in df.columns if c.lower() not in exclude]
 
 
-def split_data(df: pd.DataFrame, train_ratio: float = 0.7) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def split_data(df: pd.DataFrame, train_ratio: float = 0.7) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Chronological train/test split."""
     split_idx = int(len(df) * train_ratio)
     train = df.iloc[:split_idx].copy()
@@ -156,8 +170,12 @@ def split_data(df: pd.DataFrame, train_ratio: float = 0.7) -> Tuple[pd.DataFrame
     return train, test
 
 
-def load_data(symbol: str = "AAPL", cache_dir: str = "data",
-              start: str = "2015-01-01", end: str = "2024-12-31") -> pd.DataFrame:
+def load_data(
+    symbol: str = "AAPL",
+    cache_dir: str = "data",
+    start: str = "2015-01-01",
+    end: str = "2024-12-31",
+) -> pd.DataFrame:
     """Convenience function: load data for a symbol."""
     loader = DataLoader(cache_dir=cache_dir, symbol=symbol, start=start, end=end)
     return loader.load()

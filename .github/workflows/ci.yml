@@ -32,7 +32,7 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          ruff check rl_trader/ --format=github
+          ruff check rl_trader/
           ruff format --check rl_trader/
 
       - name: Run tests

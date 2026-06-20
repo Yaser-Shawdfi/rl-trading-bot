@@ -8,20 +8,19 @@ Endpoints:
   GET  /api/v1/metrics          — get saved backtest metrics
   POST /api/v1/train             — trigger training (async)
 """
-import sys
-import numpy as np
-import pandas as pd
-import joblib
+
 import logging
 from pathlib import Path
-from typing import Optional, List
-from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+
+import joblib
+import pandas as pd
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from rl_trader.config import AppConfig
-from rl_trader.data import load_data, get_feature_columns, split_data
-from rl_trader.models import EnsembleAgent, BacktestEngine, TradingEnv
+from rl_trader.data import get_feature_columns, load_data, split_data
+from rl_trader.models import BacktestEngine, EnsembleAgent, TradingEnv
 
 logger = logging.getLogger("rl_trader.api")
 
@@ -45,9 +44,9 @@ app.add_middleware(
 config = AppConfig.load()
 models_dir = Path("models")
 data_cache: dict = {}
-ensemble: Optional[EnsembleAgent] = None
-backtest_summary: Optional[dict] = None
-backtest_results: Optional[pd.DataFrame] = None
+ensemble: EnsembleAgent | None = None
+backtest_summary: dict | None = None
+backtest_results: pd.DataFrame | None = None
 
 
 def _get_data(symbol: str = "AAPL") -> pd.DataFrame:
@@ -128,10 +127,13 @@ async def predict(req: PredictRequest):
     features = get_feature_columns(df)
     _, test_df = split_data(df)
 
-    env = TradingEnv(test_df, feature_cols=features,
-                     initial_balance=config.trading.initial_balance,
-                     window_size=config.trading.window_size,
-                     fee=config.trading.fee)
+    env = TradingEnv(
+        test_df,
+        feature_cols=features,
+        initial_balance=config.trading.initial_balance,
+        window_size=config.trading.window_size,
+        fee=config.trading.fee,
+    )
     obs, _ = env.reset()
 
     # Advance to requested day
@@ -165,7 +167,9 @@ async def run_backtest(symbol: str = "AAPL"):
     _, test_df = split_data(df)
 
     results, summary = BacktestEngine.run(
-        ens, test_df, features,
+        ens,
+        test_df,
+        features,
         initial_balance=config.trading.initial_balance,
         window_size=config.trading.window_size,
         fee=config.trading.fee,
@@ -179,7 +183,9 @@ async def run_backtest(symbol: str = "AAPL"):
     results.to_csv(models_dir / "backtest_results.csv", index=False)
     joblib.dump(summary, models_dir / "backtest_summary.joblib")
 
-    return BacktestResponse(**{k: v for k, v in summary.items() if k in BacktestResponse.model_fields})
+    return BacktestResponse(
+        **{k: v for k, v in summary.items() if k in BacktestResponse.model_fields}
+    )
 
 
 @app.get("/api/v1/metrics")
@@ -188,7 +194,9 @@ async def get_metrics():
     summary_path = models_dir / "backtest_summary.joblib"
     if summary_path.exists():
         return joblib.load(summary_path)
-    raise HTTPException(status_code=404, detail="No backtest results found. Run /api/v1/backtest first.")
+    raise HTTPException(
+        status_code=404, detail="No backtest results found. Run /api/v1/backtest first."
+    )
 
 
 @app.post("/api/v1/train", response_model=TrainResponse)
@@ -200,18 +208,22 @@ async def train_agent(req: TrainRequest, background_tasks: BackgroundTasks):
         features = get_feature_columns(df)
         train_df, _ = split_data(df)
         ens = EnsembleAgent(config.agent, seeds=config.agent.ensemble_seeds)
-        ens.train(train_df, features, save_dir=models_dir,
-                  initial_balance=config.trading.initial_balance,
-                  window_size=config.trading.window_size,
-                  fee=config.trading.fee,
-                  max_position=config.trading.max_position,
-                  reward_config=config.reward)
+        ens.train(
+            train_df,
+            features,
+            save_dir=models_dir,
+            initial_balance=config.trading.initial_balance,
+            window_size=config.trading.window_size,
+            fee=config.trading.fee,
+            max_position=config.trading.max_position,
+            reward_config=config.reward,
+        )
         logger.info("Training complete!")
 
     background_tasks.add_task(_train)
     return TrainResponse(
         status="started",
-        message=f"Training {len(config.agent.ensemble_seeds)} agents on {req.symbol} ({req.timesteps:,} steps each). Check logs."
+        message=f"Training {len(config.agent.ensemble_seeds)} agents on {req.symbol} ({req.timesteps:,} steps each). Check logs.",
     )
 
 

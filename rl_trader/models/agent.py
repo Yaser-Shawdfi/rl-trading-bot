@@ -2,17 +2,18 @@
 Enterprise RL Agent + Ensemble + Backtesting Engine.
 PPO ensemble with seed averaging, full backtest metrics, model persistence.
 """
-import numpy as np
-import pandas as pd
-import joblib
+
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv
-from stable_baselines3.common.callbacks import BaseCallback
+from typing import Any
 
-from rl_trader.config import AppConfig, AgentConfig
+import numpy as np
+import pandas as pd
+from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.vec_env import DummyVecEnv
+
+from rl_trader.config import AgentConfig
 from rl_trader.models.trading_env import TradingEnv
 
 logger = logging.getLogger("rl_trader.agent")
@@ -22,8 +23,8 @@ class _TrainingCallback(BaseCallback):
     def __init__(self, check_freq: int = 10000):
         super().__init__(verbose=0)
         self.check_freq = check_freq
-        self.episode_nw: List[float] = []
-        self.episode_dd: List[float] = []
+        self.episode_nw: list[float] = []
+        self.episode_dd: list[float] = []
 
     def _on_step(self) -> bool:
         for info in self.locals.get("infos", []):
@@ -47,7 +48,7 @@ class TradingAgent:
     def __init__(self, config: AgentConfig, seed: int = 42):
         self.config = config
         self.seed = seed
-        self.model: Optional[PPO] = None
+        self.model: PPO | None = None
 
     def _build_model(self, env) -> PPO:
         return PPO(
@@ -67,18 +68,31 @@ class TradingAgent:
             policy_kwargs=dict(net_arch=dict(pi=[128, 64], vf=[128, 64])),
         )
 
-    def train(self, df_train: pd.DataFrame, features: List[str],
-              initial_balance: float = 10000, window_size: int = 10,
-              fee: float = 0.001, max_position: float = 1.0,
-              reward_config=None, save_dir: Optional[Path] = None) -> PPO:
+    def train(
+        self,
+        df_train: pd.DataFrame,
+        features: list[str],
+        initial_balance: float = 10000,
+        window_size: int = 10,
+        fee: float = 0.001,
+        max_position: float = 1.0,
+        reward_config=None,
+        save_dir: Path | None = None,
+    ) -> PPO:
         """Train the agent."""
         logger.info(f"Training PPO (seed={self.seed}, steps={self.config.total_timesteps:,})")
 
         def make_env():
-            return TradingEnv(df_train, feature_cols=features,
-                              initial_balance=initial_balance,
-                              window_size=window_size, fee=fee,
-                              max_position=max_position, reward_config=reward_config)
+            return TradingEnv(
+                df_train,
+                feature_cols=features,
+                initial_balance=initial_balance,
+                window_size=window_size,
+                fee=fee,
+                max_position=max_position,
+                reward_config=reward_config,
+            )
+
         env = DummyVecEnv([make_env])
 
         self.model = self._build_model(env)
@@ -110,12 +124,12 @@ class TradingAgent:
 class EnsembleAgent:
     """Ensemble of PPO agents with averaged predictions."""
 
-    def __init__(self, config: AgentConfig, seeds: Optional[List[int]] = None):
+    def __init__(self, config: AgentConfig, seeds: list[int] | None = None):
         self.config = config
         self.seeds = seeds or config.ensemble_seeds
-        self.agents: List[TradingAgent] = []
+        self.agents: list[TradingAgent] = []
 
-    def train(self, df_train, features, **kwargs) -> List[PPO]:
+    def train(self, df_train, features, **kwargs) -> list[PPO]:
         save_dir = kwargs.pop("save_dir", None)
         for seed in self.seeds:
             agent = TradingAgent(self.config, seed=seed)
@@ -151,17 +165,28 @@ class BacktestEngine:
     """Run backtests and compute comprehensive metrics."""
 
     @staticmethod
-    def run(agent, df_test: pd.DataFrame, features: List[str],
-            initial_balance: float = 10000, window_size: int = 10,
-            fee: float = 0.001, max_position: float = 1.0,
-            reward_config=None) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    def run(
+        agent,
+        df_test: pd.DataFrame,
+        features: list[str],
+        initial_balance: float = 10000,
+        window_size: int = 10,
+        fee: float = 0.001,
+        max_position: float = 1.0,
+        reward_config=None,
+    ) -> tuple[pd.DataFrame, dict[str, Any]]:
         """Run backtest and return results DataFrame + summary metrics."""
         logger.info("Running backtest on test data...")
 
-        env = TradingEnv(df_test, feature_cols=features,
-                         initial_balance=initial_balance,
-                         window_size=window_size, fee=fee,
-                         max_position=max_position, reward_config=reward_config)
+        env = TradingEnv(
+            df_test,
+            feature_cols=features,
+            initial_balance=initial_balance,
+            window_size=window_size,
+            fee=fee,
+            max_position=max_position,
+            reward_config=reward_config,
+        )
         obs, _ = env.reset()
 
         results = []
@@ -172,18 +197,20 @@ class BacktestEngine:
             else:  # Single model
                 action, _ = agent.predict(obs, deterministic=True)
             obs, reward, terminated, truncated, info = env.step(action)
-            results.append({
-                "step": info["step"],
-                "net_worth": info["net_worth"],
-                "balance": info["balance"],
-                "shares_held": info["shares_held"],
-                "price": info["price"],
-                "action": info["action"],
-                "position_frac": info.get("position_frac", 0),
-                "daily_return": info.get("daily_return", 0),
-                "drawdown": info.get("drawdown", 0),
-                "max_drawdown": info.get("max_drawdown", 0),
-            })
+            results.append(
+                {
+                    "step": info["step"],
+                    "net_worth": info["net_worth"],
+                    "balance": info["balance"],
+                    "shares_held": info["shares_held"],
+                    "price": info["price"],
+                    "action": info["action"],
+                    "position_frac": info.get("position_frac", 0),
+                    "daily_return": info.get("daily_return", 0),
+                    "drawdown": info.get("drawdown", 0),
+                    "max_drawdown": info.get("max_drawdown", 0),
+                }
+            )
             done = terminated or truncated
 
         results_df = pd.DataFrame(results)
@@ -191,7 +218,7 @@ class BacktestEngine:
         return results_df, summary
 
     @staticmethod
-    def _compute_metrics(results: pd.DataFrame, env, df_test) -> Dict[str, Any]:
+    def _compute_metrics(results: pd.DataFrame, env, df_test) -> dict[str, Any]:
         final_nw = results["net_worth"].iloc[-1]
         total_return = (final_nw - env.initial_balance) / env.initial_balance
         daily_returns = results["daily_return"].values
@@ -222,6 +249,8 @@ class BacktestEngine:
             "bh_final": env.initial_balance * (1 + bh_return),
             "outperformed": total_return > bh_return,
         }
-        logger.info(f"Backtest: Return={total_return:.2%} Sharpe={sharpe:.2f} "
-                     f"MaxDD={max_dd:.2%} WinRate={win_rate:.1%} B&H={bh_return:.2%}")
+        logger.info(
+            f"Backtest: Return={total_return:.2%} Sharpe={sharpe:.2f} "
+            f"MaxDD={max_dd:.2%} WinRate={win_rate:.1%} B&H={bh_return:.2%}"
+        )
         return summary

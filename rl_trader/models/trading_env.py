@@ -1,12 +1,13 @@
 """
 Enterprise trading environment — continuous action space + risk-adjusted reward.
 """
+
+import logging
+
 import numpy as np
 import pandas as pd
-import logging
 from gymnasium import Env
 from gymnasium.spaces import Box
-from typing import Optional, List
 
 from rl_trader.config import RewardConfig
 
@@ -24,12 +25,12 @@ class TradingEnv(Env):
     def __init__(
         self,
         df: pd.DataFrame,
-        feature_cols: Optional[List[str]] = None,
+        feature_cols: list[str] | None = None,
         initial_balance: float = 10000,
         window_size: int = 10,
         fee: float = 0.001,
         max_position: float = 1.0,
-        reward_config: Optional[RewardConfig] = None,
+        reward_config: RewardConfig | None = None,
     ):
         super().__init__()
 
@@ -45,8 +46,10 @@ class TradingEnv(Env):
         self._feature_mean = self.df[self.feature_cols].mean()
         self._feature_std = self.df[self.feature_cols].std().replace(0, 1)
         self._normed = (
-            (self.df[self.feature_cols] - self._feature_mean) / self._feature_std
-        ).fillna(0).values.astype(np.float32)
+            ((self.df[self.feature_cols] - self._feature_mean) / self._feature_std)
+            .fillna(0)
+            .values.astype(np.float32)
+        )
 
         # Spaces
         n_obs = len(self.feature_cols) * window_size + 2
@@ -55,7 +58,7 @@ class TradingEnv(Env):
 
         self._reset_state()
 
-    def _auto_features(self) -> List[str]:
+    def _auto_features(self) -> list[str]:
         exclude = {"open", "high", "low", "close", "volume", "adj close"}
         return [c for c in self.df.columns if c.lower() not in exclude]
 
@@ -84,17 +87,13 @@ class TradingEnv(Env):
 
         nw_ratio = np.array([self.net_worth / self.initial_balance], dtype=np.float32)
         price = float(self.df.iloc[self.current_step]["close"])
-        pos_frac = np.array([
-            (self.shares_held * price) / max(self.net_worth, 1)
-        ], dtype=np.float32)
+        pos_frac = np.array([(self.shares_held * price) / max(self.net_worth, 1)], dtype=np.float32)
 
         return np.concatenate([window, nw_ratio, pos_frac]).astype(np.float32)
 
     def step(self, action):
         price = float(self.df.iloc[self.current_step]["close"])
-        action_val = float(np.clip(
-            action[0] if hasattr(action, "__len__") else action, -1, 1
-        ))
+        action_val = float(np.clip(action[0] if hasattr(action, "__len__") else action, -1, 1))
 
         # Compute target position
         current_pos_val = self.shares_held * price
@@ -112,13 +111,13 @@ class TradingEnv(Env):
                 shares = trade_value / (price * (1 + self.fee))
                 cost = shares * price
                 fee = cost * self.fee
-                self.balance -= (cost + fee)
+                self.balance -= cost + fee
                 self.shares_held += shares
             else:  # SELL
                 shares = min(abs(trade_value) / price, self.shares_held)
                 revenue = shares * price
                 fee = revenue * self.fee
-                self.balance += (revenue - fee)
+                self.balance += revenue - fee
                 self.shares_held -= shares
             self.total_fees += fee
             self.total_trades += 1
@@ -128,13 +127,11 @@ class TradingEnv(Env):
             next_price = float(self.df.iloc[self.current_step]["close"])
             revenue = self.shares_held * next_price
             fee = revenue * self.fee
-            self.balance += (revenue - fee)
+            self.balance += revenue - fee
             self.total_fees += fee
             self.shares_held = 0
 
-        next_price = float(
-            self.df.iloc[min(self.current_step, self.max_steps)]["close"]
-        )
+        next_price = float(self.df.iloc[min(self.current_step, self.max_steps)]["close"])
         self.prev_net_worth = self.net_worth
         self.net_worth = self.balance + self.shares_held * next_price
 
@@ -174,7 +171,7 @@ class TradingEnv(Env):
             return daily_return - (self.fee * 0.5 if abs(trade_value) > 1 else 0)
 
         # Risk-adjusted
-        recent = self.returns_history[-rc.sharpe_window:]
+        recent = self.returns_history[-rc.sharpe_window :]
         mean_r = np.mean(recent)
         std_r = np.std(recent) + 1e-8
 

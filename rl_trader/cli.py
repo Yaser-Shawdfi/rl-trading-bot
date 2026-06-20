@@ -7,16 +7,16 @@ Usage:
   rltrader api --host 0.0.0.0 --port 8000
   rltrader ui --port 8501
 """
+
 import argparse
 import sys
-import logging
 from pathlib import Path
 
 from rl_trader.config import AppConfig, setup_logging
 
 
 def cmd_train(args):
-    from rl_trader.data import load_data, get_feature_columns, split_data
+    from rl_trader.data import get_feature_columns, load_data, split_data
     from rl_trader.models import EnsembleAgent
 
     config = AppConfig.load()
@@ -27,17 +27,21 @@ def cmd_train(args):
     train_df, _ = split_data(df)
 
     ensemble = EnsembleAgent(config.agent, seeds=config.agent.ensemble_seeds)
-    ensemble.train(train_df, features, save_dir=Path("models"),
-                   initial_balance=config.trading.initial_balance,
-                   window_size=config.trading.window_size,
-                   fee=config.trading.fee,
-                   max_position=config.trading.max_position,
-                   reward_config=config.reward)
+    ensemble.train(
+        train_df,
+        features,
+        save_dir=Path("models"),
+        initial_balance=config.trading.initial_balance,
+        window_size=config.trading.window_size,
+        fee=config.trading.fee,
+        max_position=config.trading.max_position,
+        reward_config=config.reward,
+    )
 
 
 def cmd_backtest(args):
-    from rl_trader.data import load_data, get_feature_columns, split_data
-    from rl_trader.models import EnsembleAgent, BacktestEngine
+    from rl_trader.data import get_feature_columns, load_data, split_data
+    from rl_trader.models import BacktestEngine, EnsembleAgent
 
     config = AppConfig.load()
     setup_logging(config.raw)
@@ -50,7 +54,9 @@ def cmd_backtest(args):
     ensemble.load(Path("models"))
 
     results, summary = BacktestEngine.run(
-        ensemble, test_df, features,
+        ensemble,
+        test_df,
+        features,
         initial_balance=config.trading.initial_balance,
         window_size=config.trading.window_size,
         fee=config.trading.fee,
@@ -58,15 +64,15 @@ def cmd_backtest(args):
         reward_config=config.reward,
     )
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"Backtest Results for {args.symbol}")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     for k, v in summary.items():
         print(f"  {k:>20s}: {v}")
 
 
 def cmd_predict(args):
-    from rl_trader.data import load_data, get_feature_columns, split_data
+    from rl_trader.data import get_feature_columns, load_data, split_data
     from rl_trader.models import EnsembleAgent, TradingEnv
 
     config = AppConfig.load()
@@ -79,9 +85,12 @@ def cmd_predict(args):
     ensemble = EnsembleAgent(config.agent, seeds=config.agent.ensemble_seeds)
     ensemble.load(Path("models"))
 
-    env = TradingEnv(test_df, feature_cols=features,
-                     initial_balance=config.trading.initial_balance,
-                     window_size=config.trading.window_size)
+    env = TradingEnv(
+        test_df,
+        feature_cols=features,
+        initial_balance=config.trading.initial_balance,
+        window_size=config.trading.window_size,
+    )
     obs, _ = env.reset()
 
     for _ in range(args.day):
@@ -97,24 +106,32 @@ def cmd_predict(args):
 
     print(f"\nPrediction for {args.symbol} (day {args.day}):")
     print(f"  Action: {label} ({action_val:.2f})")
-    print(f"  Position target: {abs(action_val)*100:.0f}%")
+    print(f"  Position target: {abs(action_val) * 100:.0f}%")
     print(f"  Current price: ${price:.2f}")
     print(f"  Net worth: ${env.net_worth:,.2f}")
 
 
 def cmd_api(args):
     import uvicorn
+
     setup_logging(AppConfig.load().raw)
     uvicorn.run("rl_trader.api:app", host=args.host, port=args.port, reload=False)
 
 
 def cmd_ui(args):
     import subprocess
-    subprocess.run([
-        "streamlit", "run", "app/app.py",
-        "--server.port", str(args.port),
-        "--server.headless", "true",
-    ])
+
+    subprocess.run(
+        [
+            "streamlit",
+            "run",
+            "app/app.py",
+            "--server.port",
+            str(args.port),
+            "--server.headless",
+            "true",
+        ]
+    )
 
 
 def main():

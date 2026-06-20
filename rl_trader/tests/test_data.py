@@ -1,6 +1,8 @@
 """Tests for data loader module."""
-import pytest
+
 import pandas as pd
+import pytest
+
 from rl_trader.data import DataLoader, get_feature_columns, split_data
 
 
@@ -8,13 +10,16 @@ from rl_trader.data import DataLoader, get_feature_columns, split_data
 def sample_df():
     """Create a small sample dataframe mimicking OHLCV data."""
     dates = pd.date_range("2024-01-01", periods=100, freq="D")
-    return pd.DataFrame({
-        "open": range(100),
-        "high": range(100, 200),
-        "low": range(0, 100)[::-1],
-        "close": range(50, 150),
-        "volume": range(1000, 1100),
-    }, index=dates)
+    return pd.DataFrame(
+        {
+            "open": range(100),
+            "high": range(100, 200),
+            "low": range(0, 100)[::-1],
+            "close": range(50, 150),
+            "volume": range(1000, 1100),
+        },
+        index=dates,
+    )
 
 
 def test_get_feature_columns(sample_df):

@@ -1,7 +1,9 @@
 """Tests for trading environment module."""
-import pytest
+
 import numpy as np
 import pandas as pd
+import pytest
+
 from rl_trader.models.trading_env import TradingEnv
 
 
@@ -11,14 +13,20 @@ def sample_env():
     dates = pd.date_range("2024-01-01", periods=200, freq="D")
     np.random.seed(42)
     prices = 100 + np.cumsum(np.random.randn(200) * 0.5)
-    df = pd.DataFrame({
-        "open": prices, "high": prices + 1, "low": prices - 1,
-        "close": prices, "volume": np.random.randint(1000, 10000, 200),
-        "returns": np.concatenate([[0], np.diff(prices) / prices[:-1]]),
-        "rsi": np.random.uniform(20, 80, 200),
-        "macd": np.random.randn(200),
-        "volatility": np.abs(np.random.randn(200)) * 0.02,
-    }, index=dates)
+    df = pd.DataFrame(
+        {
+            "open": prices,
+            "high": prices + 1,
+            "low": prices - 1,
+            "close": prices,
+            "volume": np.random.randint(1000, 10000, 200),
+            "returns": np.concatenate([[0], np.diff(prices) / prices[:-1]]),
+            "rsi": np.random.uniform(20, 80, 200),
+            "macd": np.random.randn(200),
+            "volatility": np.abs(np.random.randn(200)) * 0.02,
+        },
+        index=dates,
+    )
     features = ["returns", "rsi", "macd", "volatility"]
     return TradingEnv(df, feature_cols=features, window_size=5, initial_balance=10000)
 

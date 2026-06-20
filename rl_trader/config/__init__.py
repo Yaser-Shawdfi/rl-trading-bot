@@ -2,12 +2,13 @@
 RL Trader — Enterprise Configuration Loader.
 Loads YAML settings, with environment variable overrides for production.
 """
-import os
-import yaml
+
 import logging
-from pathlib import Path
+import os
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
+
+import yaml
 
 CONFIG_DIR = Path(__file__).parent
 DEFAULT_CONFIG = CONFIG_DIR / "settings.yaml"
@@ -15,7 +16,7 @@ DEFAULT_CONFIG = CONFIG_DIR / "settings.yaml"
 
 def load_config(config_path: Path = DEFAULT_CONFIG) -> dict:
     """Load YAML config with env var overrides."""
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     # Environment variable overrides (RLTRADER__SECTION__KEY=value)
@@ -45,8 +46,11 @@ def setup_logging(config: dict) -> logging.Logger:
     log_file = log_config.get("file")
     if log_file:
         Path(log_file).parent.mkdir(parents=True, exist_ok=True)
-        logging.basicConfig(level=level, format=fmt,
-                            handlers=[logging.FileHandler(log_file), logging.StreamHandler()])
+        logging.basicConfig(
+            level=level,
+            format=fmt,
+            handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
+        )
     else:
         logging.basicConfig(level=level, format=fmt, handlers=[logging.StreamHandler()])
 
@@ -100,8 +104,9 @@ class AppConfig:
     def from_dict(cls, config: dict):
         return cls(
             trading=TradingConfig(**config.get("trading", {})),
-            agent=AgentConfig(**{k: v for k, v in config.get("agent", {}).items()
-                                  if k != "network_arch"}),
+            agent=AgentConfig(
+                **{k: v for k, v in config.get("agent", {}).items() if k != "network_arch"}
+            ),
             reward=RewardConfig(**config.get("reward", {})),
             raw=config,
         )
