@@ -40,13 +40,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── Globals ────────────────────────────────────────────────────────────────
-config = AppConfig.load()
+# ─── Globals (lazy-loaded) ────────────────────────────────────────────────
+_config: AppConfig | None = None
 models_dir = Path("models")
 data_cache: dict = {}
 ensemble: EnsembleAgent | None = None
 backtest_summary: dict | None = None
 backtest_results: pd.DataFrame | None = None
+
+
+def _get_config() -> AppConfig:
+    global _config
+    if _config is None:
+        _config = AppConfig.load()
+    return _config
 
 
 def _get_data(symbol: str = "AAPL") -> pd.DataFrame:
@@ -58,6 +65,7 @@ def _get_data(symbol: str = "AAPL") -> pd.DataFrame:
 def _load_ensemble() -> EnsembleAgent:
     global ensemble
     if ensemble is None:
+        config = _get_config()
         ensemble = EnsembleAgent(config.agent, seeds=config.agent.ensemble_seeds)
         ensemble.load(models_dir)
     return ensemble
@@ -122,6 +130,7 @@ async def get_market_data(symbol: str, limit: int = 100):
 @app.post("/api/v1/predict", response_model=PredictResponse)
 async def predict(req: PredictRequest):
     """Get trading action for a specific day."""
+    config = _get_config()
     ens = _load_ensemble()
     df = _get_data(req.symbol)
     features = get_feature_columns(df)
@@ -161,6 +170,7 @@ async def run_backtest(symbol: str = "AAPL"):
     """Run backtest and return metrics."""
     global backtest_summary, backtest_results
 
+    config = _get_config()
     ens = _load_ensemble()
     df = _get_data(symbol)
     features = get_feature_columns(df)
@@ -204,26 +214,27 @@ async def train_agent(req: TrainRequest, background_tasks: BackgroundTasks):
     """Trigger async training (returns immediately, runs in background)."""
 
     def _train():
+        cfg = _get_config()
         df = _get_data(req.symbol)
         features = get_feature_columns(df)
         train_df, _ = split_data(df)
-        ens = EnsembleAgent(config.agent, seeds=config.agent.ensemble_seeds)
+        ens = EnsembleAgent(cfg.agent, seeds=cfg.agent.ensemble_seeds)
         ens.train(
             train_df,
             features,
             save_dir=models_dir,
-            initial_balance=config.trading.initial_balance,
-            window_size=config.trading.window_size,
-            fee=config.trading.fee,
-            max_position=config.trading.max_position,
-            reward_config=config.reward,
+            initial_balance=cfg.trading.initial_balance,
+            window_size=cfg.trading.window_size,
+            fee=cfg.trading.fee,
+            max_position=cfg.trading.max_position,
+            reward_config=cfg.reward,
         )
         logger.info("Training complete!")
 
     background_tasks.add_task(_train)
     return TrainResponse(
         status="started",
-        message=f"Training {len(config.agent.ensemble_seeds)} agents on {req.symbol} ({req.timesteps:,} steps each). Check logs.",
+        message=f"Training {len(_get_config().agent.ensemble_seeds)} agents on {req.symbol} ({req.timesteps:,} steps each). Check logs.",
     )
 
 
