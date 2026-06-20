@@ -2,7 +2,7 @@
 
 A production-grade RL trading system with PPO ensemble, 42 technical indicators, REST API, Docker deployment, and CI/CD.
 
-## 🏗️ Architecture
+##  Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -29,7 +29,7 @@ A production-grade RL trading system with PPO ensemble, 42 technical indicators,
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## 📦 Installation
+##  Installation
 
 ### From Source (Development)
 ```bash
@@ -45,7 +45,7 @@ docker-compose up
 # UI at http://localhost:8501
 ```
 
-## 🚀 Usage
+##  Usage
 
 ### CLI Commands
 ```bash
@@ -89,7 +89,7 @@ curl -X POST http://localhost:8000/api/v1/train \
 
 API docs available at: `http://localhost:8000/docs`
 
-## 🧪 Testing
+##  Testing
 ```bash
 # Run all tests
 pytest rl_trader/tests/ -v
@@ -98,7 +98,7 @@ pytest rl_trader/tests/ -v
 pytest rl_trader/tests/ --cov=rl_trader --cov-report=term
 ```
 
-## 📁 Project Structure
+##  Project Structure
 ```
 rl-trading-bot/
 ├── rl_trader/                    # Python package
@@ -131,7 +131,7 @@ rl-trading-bot/
 └── README.md
 ```
 
-## 🔧 Configuration
+##  Configuration
 
 All config in `rl_trader/config/settings.yaml`. Override with env vars:
 ```bash
@@ -140,6 +140,6 @@ export RLTRADER__AGENT__TOTAL_TIMESTEPS=500000
 export RLTRADER__LOGGING__LEVEL=DEBUG
 ```
 
-## 📄 License
+##  License
 
 MIT

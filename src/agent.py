@@ -86,7 +86,7 @@ def train_single_agent(df_train, features, seed, total_timesteps, save=True):
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         model_path = MODELS_DIR / f"ppo_agent_seed_{seed}"
         model.save(model_path)
-        print(f"✅ Saved to {model_path}")
+        print(f" Saved to {model_path}")
 
     return model
 
@@ -98,7 +98,7 @@ def train_ensemble(df_train, features, seeds=ENSEMBLE_SEEDS, total_timesteps=TOT
         model = train_single_agent(df_train, features, seed, total_timesteps)
         models.append(model)
 
-    print(f"\n✅ Ensemble of {len(models)} agents trained (seeds: {seeds})")
+    print(f"\n Ensemble of {len(models)} agents trained (seeds: {seeds})")
     return models
 
 
@@ -217,4 +217,4 @@ if __name__ == "__main__":
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     results.to_csv(MODELS_DIR / "backtest_results.csv", index=False)
     joblib.dump(summary, MODELS_DIR / "backtest_summary.joblib")
-    print(f"\n✅ Results saved to {MODELS_DIR / 'backtest_results.csv'}")
+    print(f"\n Results saved to {MODELS_DIR / 'backtest_results.csv'}")

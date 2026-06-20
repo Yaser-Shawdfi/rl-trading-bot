@@ -24,7 +24,7 @@ from trading_env import TradingEnv
 from agent import evaluate_ensemble
 
 
-st.set_page_config(page_title="RL Trading Bot — Improved", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="RL Trading Bot — Improved", page_icon="", layout="wide")
 
 
 @st.cache_data
@@ -57,13 +57,13 @@ backtest, summary = get_backtest()
 features = get_feature_columns(df)
 train_df, test_df = split_data(df)
 
-st.sidebar.title("🤖 RL Trading Bot")
+st.sidebar.title(" RL Trading Bot")
 st.sidebar.markdown("---")
 page = st.sidebar.radio("Navigate", [
-    "📊 Overview",
-    "📈 Backtest Results",
-    "🔮 Live Prediction",
-    "💹 Market Analysis",
+    " Overview",
+    " Backtest Results",
+    " Live Prediction",
+    " Market Analysis",
 ])
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Symbol:** AAPL (Apple)")
@@ -73,8 +73,8 @@ st.sidebar.markdown(f"**Action:** Continuous (0-100%)")
 st.sidebar.markdown(f"**Data:** {len(df):,} days")
 
 
-if page == "📊 Overview":
-    st.title("📊 RL Trading Bot — Overview")
+if page == " Overview":
+    st.title(" RL Trading Bot — Overview")
     st.markdown("Improved RL trading agent with **continuous action space**, **risk-adjusted reward**, and **3-agent ensemble**.")
 
     col1, col2, col3, col4 = st.columns(4)
@@ -118,8 +118,8 @@ if page == "📊 Overview":
         st.markdown(f"- 42 features\n- Continuous actions (0-100%)\n- Risk-adjusted reward (Sharpe + DD penalty)\n- 3-agent ensemble (seeds: {ENSEMBLE_SEEDS})\n- Return: {summary['total_return']:.2%}" if summary else "- 42 features\n- Continuous actions\n- Risk-adjusted reward\n- 3-agent ensemble")
 
 
-elif page == "📈 Backtest Results":
-    st.title("📈 Backtest Results")
+elif page == " Backtest Results":
+    st.title(" Backtest Results")
 
     if backtest is not None and summary is not None:
         st.subheader("Performance Summary")
@@ -128,7 +128,7 @@ elif page == "📈 Backtest Results":
         col1.metric("Final Portfolio", f"${summary['final_net_worth']:,.2f}")
         col2.metric("Agent Return", f"{summary['total_return']:.2%}")
         col3.metric("Buy & Hold", f"{summary['bh_return']:.2%}")
-        col4.metric("Outperformed?", "✅ Yes" if summary["outperformed"] else "❌ No")
+        col4.metric("Outperformed?", " Yes" if summary["outperformed"] else " No")
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Sharpe Ratio", f"{summary['sharpe_ratio']:.2f}")
@@ -181,11 +181,11 @@ elif page == "📈 Backtest Results":
         st.warning("No backtest results. Run `python src/agent.py` first.")
 
 
-elif page == "🔮 Live Prediction":
-    st.title("🔮 Live Prediction")
+elif page == " Live Prediction":
+    st.title(" Live Prediction")
 
     if models is not None:
-        if st.button("🚀 Run Ensemble on Test Data", type="primary"):
+        if st.button(" Run Ensemble on Test Data", type="primary"):
             with st.spinner("Running 3-agent ensemble..."):
                 results_df, eval_summary = evaluate_ensemble(models, test_df, features)
 
@@ -214,8 +214,8 @@ elif page == "🔮 Live Prediction":
         st.warning("Models not trained. Run `python src/agent.py` first.")
 
 
-elif page == "💹 Market Analysis":
-    st.title("💹 Market Analysis")
+elif page == " Market Analysis":
+    st.title(" Market Analysis")
 
     indicator = st.selectbox("Select indicator", features + ["close", "volume"])
 

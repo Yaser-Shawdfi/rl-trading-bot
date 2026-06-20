@@ -29,7 +29,7 @@ def download_data(symbol=SYMBOL, start=START_DATE, end=END_DATE, save=True):
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         fname = DATA_DIR / f"{symbol}_daily.csv"
         df.to_csv(fname)
-        print(f"✅ Saved {len(df)} rows to {fname}")
+        print(f" Saved {len(df)} rows to {fname}")
 
     return df
 
@@ -132,7 +132,7 @@ def load_data(filepath=None):
         filepath = DATA_DIR / f"{SYMBOL}_daily.csv"
     if filepath.exists():
         df = pd.read_csv(filepath, index_col=0, parse_dates=True)
-        print(f"✅ Loaded {len(df)} rows from {filepath}")
+        print(f" Loaded {len(df)} rows from {filepath}")
         return df
     else:
         return download_data()
