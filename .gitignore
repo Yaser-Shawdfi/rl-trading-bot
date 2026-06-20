@@ -1,0 +1,35 @@
+# Data files
+data/*.csv
+data/*.zip
+
+# Model artifacts
+models/*.zip
+models/*.csv
+models/*.joblib
+
+# Reports
+reports/*.png
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Jupyter
+.ipynb_checkpoints/
